@@ -1,0 +1,130 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven'
+    }
+
+    environment {
+        APP_NAME = 'spring-petclinic'
+        DOCKER_IMAGE = 'walidbannouri/pet-clinic-app'
+        VERSION = "${env.BUILD_ID}"
+        KUBE_NAMESPACE = 'petclinic'
+        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials'
+        MYSQL_USER = credentials('mysql-user')
+        MYSQL_PASSWORD = credentials('mysql-password')
+        KUBECONFIG = "/var/jenkins_home/kubeconfig" // Change this to actual path
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/bannouriwalid/PetClinic.git'
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                sh 'mvn clean install'
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t $DOCKER_IMAGE:$VERSION ."
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS_ID) {
+                        docker.image("${DOCKER_IMAGE}:${VERSION}").push()
+                        docker.image("${DOCKER_IMAGE}:${VERSION}").push('latest')
+                    }
+                }
+            }
+        }
+
+        stage('Generate Kubernetes YAML') {
+            steps {
+                script {
+                    def mysqlYaml = """
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+  namespace: ${env.KUBE_NAMESPACE}
+type: Opaque
+stringData:
+  username: ${env.MYSQL_USER}
+  password: ${env.MYSQL_PASSWORD}
+"""
+                    writeFile file: 'k8s/mysql.yaml', text: mysqlYaml
+
+                    def deploymentYaml = """
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${env.APP_NAME}
+  namespace: ${env.KUBE_NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${env.APP_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${env.APP_NAME}
+    spec:
+      containers:
+      - name: ${env.APP_NAME}
+        image: ${env.DOCKER_IMAGE}
+        ports:
+        - containerPort: 8080
+"""
+                    writeFile file: 'k8s/deployment.yaml', text: deploymentYaml
+
+                    def serviceYaml = """
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${env.APP_NAME}
+  namespace: ${env.KUBE_NAMESPACE}
+spec:
+  selector:
+    app: ${env.APP_NAME}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      nodePort: 30001  
+  type: NodePort
+"""
+                    writeFile file: 'k8s/service.yaml', text: serviceYaml
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                    kubectl --kubeconfig=$KUBECONFIG create namespace $KUBE_NAMESPACE --dry-run=client -o yaml | kubectl --kubeconfig=$KUBECONFIG apply -f -
+                    kubectl --kubeconfig=$KUBECONFIG apply -f k8s/mysql.yaml --validate=false
+                    sleep 30
+                    kubectl --kubeconfig=$KUBECONFIG apply -f k8s/deployment.yaml --validate=false
+                    kubectl --kubeconfig=$KUBECONFIG apply -f k8s/service.yaml --validate=false
+                    kubectl --kubeconfig=$KUBECONFIG rollout status deployment/$APP_NAME -n $KUBE_NAMESPACE --timeout=180s
+                '''
+            }
+        }
+    }
+}
