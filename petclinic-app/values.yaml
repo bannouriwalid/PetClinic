@@ -4,6 +4,12 @@ serviceAccount:
   create: true
   name: ""
 
+autoscaling:
+  enabled: false  # Set this to true if you want autoscaling enabled
+  minReplicas: 1  # Minimum number of replicas when autoscaling
+  maxReplicas: 3  # Maximum number of replicas when autoscaling
+  targetCPUUtilizationPercentage: 80  # Target CPU utilization for autoscaling
+  
 replicaCount: 1
 
 image:
