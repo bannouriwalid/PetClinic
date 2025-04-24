@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  selector:
+    app: {{ .Release.Name }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}  # Use values.yaml service port
+      targetPort: {{ .Values.service.targetPort }}  # Use values.yaml targetPort
+      nodePort: {{ .Values.service.nodePort }}  # Use values.yaml nodePort
+  type: {{ .Values.service.type }}  # Service type (NodePort)

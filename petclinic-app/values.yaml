@@ -1,0 +1,24 @@
+# Default values for petclinic-app.
+# This file contains the default values for your chart.
+
+replicaCount: 1
+
+image:
+  repository: "walidbannouri/pet-clinic-app"  # Your Docker image repository
+  tag: "latest"  # This will be overridden by Jenkins pipeline variable
+
+mysql:
+  username: "petclinic"  # Define a default MySQL username
+  password: "petclinic"  # Define a default MySQL password
+  database: "petclinic"  # MySQL database name
+
+service:
+  name: petclinic-service  # The name of the service
+  type: NodePort  # Change to NodePort or LoadBalancer as needed
+  port: 80
+  targetPort: 8080
+  nodePort: 30001  # Exposing on this port
+
+ingress:
+  enabled: false  # Disable ingress by default (can be enabled later)
+  # Add ingress settings here if required
