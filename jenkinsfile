@@ -89,7 +89,7 @@ spec:
       - name: ${env.APP_NAME}
         image: ${env.DOCKER_IMAGE}
         ports:
-        - containerPort: 8080
+        - containerPort: 8081
 """
                     writeFile file: 'k8s/deployment.yaml', text: deploymentYaml
 

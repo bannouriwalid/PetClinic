@@ -5,7 +5,7 @@ services:
     build: .
     image: spring-petclinic:latest
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
       - SPRING_PROFILES_ACTIVE=mysql
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/petclinic
